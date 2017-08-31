@@ -1,0 +1,139 @@
+name: {{FRAMEWORK_NAME}}
+scheduler:
+  principal: {{FRAMEWORK_PRINCIPAL}}
+  user: {{FRAMEWORK_USER}}
+pods:
+  db:
+    count: 1
+    image: {{DB_DOCKER_IMAGE}}
+    placement: {{NODE_PLACEMENT}}
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      launch:
+        goal: RUNNING
+        cpus: {{DB_CPU}}
+        memory: {{DB_MEM}}
+        ports:
+          db:
+            port: 5432
+        env:
+          POSTGRES_DB: {{DB_NAME}}
+          POSTGRES_USER: {{DB_USER}}
+          POSTGRES_PASSWORD: {{DB_PASS}}
+  logstash:
+    count: 1
+    image: {{LOGSTASH_DOCKER_IMAGE}}
+    placement: {{NODE_PLACEMENT}}
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      launch:
+        goal: RUNNING
+        cpus: {{LOGSTASH_CPU}}
+        memory: {{LOGSTASH_MEM}}
+        ports:
+          logging:
+            port: 9229
+          health-check:
+            advertise: true
+            port: 80
+            vip:
+              port: 80
+              prefix: logstash
+        env:
+          LOGSTASH_ARGS: "-w 1"
+          ELASTICSEARCH_URLS: {{ELASTICSEARCH_URLS}}
+          ELASTICSEARCH_LB: {{ELASTICSEARCH_LB}}
+  rabbitmq:
+    count: 1
+    image: {{RABBITMQ_DOCKER_IMAGE}}
+    placement: {{NODE_PLACEMENT}}
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      launch:
+        goal: RUNNING
+        cpus: {{RABBITMQ_CPU}}
+        memory: {{RABBITMQ_MEM}}
+        ports:
+          broker:
+            port: 5672
+          management:
+            port: 15672
+  scheduler:
+    image: {{SCALE_DOCKER_IMAGE}}
+    count: {{NODE_COUNT}}
+    placement: {{NODE_PLACEMENT}}
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      launch:
+        goal: RUNNING
+        cmd: ""
+        cpus: {{NODE_CPUS}}
+        memory: {{NODE_MEM}}
+        volume:
+  webserver:
+    image: {{SCALE_DOCKER_IMAGE}}
+    count: 1
+    placement: {{NODE_PLACEMENT}}
+    {{#ENABLE_VIRTUAL_NETWORK}}
+    networks:
+      {{VIRTUAL_NETWORK_NAME}}:
+        labels: {{VIRTUAL_NETWORK_PLUGIN_LABELS}}
+    {{/ENABLE_VIRTUAL_NETWORK}}
+    tasks:
+      launch:
+        goal: RUNNING
+        cpus: {{WEBSERVER_CPU}}
+        memory: {{WEBSERVER_MEM}}
+        volume:
+    
+
+
+plans:
+  scale-deploy:
+    strategy: serial
+    phases:
+      supporting-deploy:
+        strategy: parallel
+        phases:
+          {{#DB_HOST}}
+          db-deploy:
+            pod: db
+            steps:
+              - default: [[launch]]
+          {{/DB_HOST}}
+          {{#LOGSTASH_ADDRESS}}
+          logstash-deploy:
+            pod: logstash
+            steps:
+              - default: [[launch]]
+          {{/LOGSTASH_ADDRESS}}
+          {{#BROKER_URL}}
+          rabbitmq-deploy:
+            pod: rabbitmq
+            steps:
+              - default: [[launch]]
+          {{/BROKER_URL}}
+      webserver-deploy:
+        pod: webserver
+        steps:
+          - default: [[launch]]
+      scheduler-deploy:
+        pod: scheduler
+        steps:
+          - default: [[launch]]

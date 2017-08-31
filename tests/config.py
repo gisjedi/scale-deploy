@@ -1,0 +1,4 @@
+PACKAGE_NAME = 'scale'
+SERVICE_NAME = 'scale'
+DEFAULT_TASK_COUNT = 1
+
